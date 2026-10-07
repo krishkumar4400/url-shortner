@@ -4,7 +4,7 @@ import env from "../config/env.js";
 
 async function registerUser(req, res) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     const isUserExists = await userModel.findOne({ email });
     if (isUserExists) {
@@ -18,6 +18,7 @@ async function registerUser(req, res) {
       name,
       email,
       password,
+      role,
     });
 
     const accessToken = await user.generateAccessToken();

@@ -1,4 +1,6 @@
+import jwt from "jsonwebtoken";
 import userModel from "../models/user.model.js";
+import env from "../config/env.js";
 
 async function registerUser(req, res) {
   try {
@@ -142,4 +144,66 @@ async function getCurrentUser(req, res) {
   }
 }
 
-export { registerUser, loginUser, logoutUser, getCurrentUser };
+async function refreshAccessToken(req, res) {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "You are not logged in",
+        success: false,
+      });
+    }
+
+    const decoded = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
+    const user = await userModel
+      .findById(decoded.userId)
+      .select("+refreshToken");
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Refresh token is not valid 1",
+        success: false,
+      });
+    }
+
+    if (user.refreshToken !== refreshToken) {
+      user.refreshToken = null;
+      await user.save();
+      return res.status(400).clearCookie("refreshToken").json({
+        message: "Refresh token is not valid 2",
+        success: false,
+      });
+    }
+
+    const accessToken = await user.generateAccessToken();
+    const newRefreshToken = await user.generateRefreshToken();
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    return res
+      .status(200)
+      .cookie("refreshToken", newRefreshToken, { httpOnly: true })
+      .json({
+        message: "Token has been refreshed successfully",
+        success: true,
+        data: {
+          accessToken,
+        },
+      });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({
+      message: "Unauthorized access",
+      success: false,
+    });
+  }
+}
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  getCurrentUser,
+  refreshAccessToken,
+};
